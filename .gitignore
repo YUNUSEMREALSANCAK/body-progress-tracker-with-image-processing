@@ -1,0 +1,26 @@
+# Node
+node_modules/
+.next/
+out/
+build/
+.env*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+venv/
+env/
+.pytest_cache/
+
+# System
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temp
+*.tmp
+*.log
