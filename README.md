@@ -2,8 +2,13 @@
 
 **BodyProgress Tracker**, spor yapan bireylerin vücut gelişimlerini profesyonel bir şekilde takip etmeleri için tasarlanmış, **Yapay Zeka** destekli bir görsel analiz aracıdır.
 
-![App Screenshot](https://via.placeholder.com/800x400.png?text=BodyProgress+Tracker+Demo)
-*(Örnek ekran görüntüsü)*
+### 📸 Ekran Görüntüleri
+
+| Analiz Edilmiş Görüntü 1 | Analiz Edilmiş Görüntü 2 |
+|--------------------------|--------------------------|
+| ![Result 1](./result_images/6b31402d-ecf2-4fe0-ab81-6e492cfa3377.jpeg) | ![Result 2](./result_images/ff83e080-c298-40c1-aaa2-b611973226ef.jpeg) |
+
+*(Bu görseller sistem tarafından üretilmiş gerçek çıktı örnekleridir)*
 
 ---
 

@@ -10,6 +10,7 @@ export default function ComparisonView() {
   const [beforePreview, setBeforePreview] = useState<string | null>(null);
   const [afterPreview, setAfterPreview] = useState<string | null>(null);
   const [alignedImage, setAlignedImage] = useState<string | null>(null);
+  const [annotatedBefore, setAnnotatedBefore] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [opacity, setOpacity] = useState(50);
 
@@ -19,10 +20,12 @@ export default function ComparisonView() {
       if (type === 'before') {
         setBeforeImage(file);
         setBeforePreview(URL.createObjectURL(file));
+        setAnnotatedBefore(null); // Reset annotated when new file selected
       } else {
         setAfterImage(file);
         setAfterPreview(URL.createObjectURL(file));
       }
+      setAlignedImage(null); // Reset result
     }
   };
 
@@ -45,8 +48,9 @@ export default function ComparisonView() {
         throw new Error('Alignment failed');
       }
 
-      const blob = await response.blob();
-      setAlignedImage(URL.createObjectURL(blob));
+      const data = await response.json();
+      setAnnotatedBefore(data.before);
+      setAlignedImage(data.after);
     } catch (error) {
       console.error(error);
     } finally {
@@ -112,7 +116,7 @@ export default function ComparisonView() {
           <div className="relative w-full max-w-[500px] aspect-[3/4] border border-gray-300 rounded-lg overflow-hidden bg-gray-100">
             {/* Base Image (Before) */}
             <img
-              src={beforePreview}
+              src={annotatedBefore || beforePreview}
               alt="Base"
               className="absolute top-0 left-0 w-full h-full object-contain"
             />
