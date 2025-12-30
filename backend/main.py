@@ -28,39 +28,41 @@ async def align_images_endpoint(before_image: UploadFile = File(...), after_imag
         before_bytes = await before_image.read()
         after_bytes = await after_image.read()
         
-        # 1. Process & Annotate Before Image
-        # We need numpy image for processing
+        # 1. Process Before Image
         nparr1 = np.frombuffer(before_bytes, np.uint8)
         img1 = cv2.imdecode(nparr1, cv2.IMREAD_COLOR)
         
-        # Detect pose for fallback if needed (though annotate uses face mainly)
-        # For full robustness we could call detect_image_numpy, but let's stick to annotate_image
-        # which runs detection internally.
-        annotated_before, _ = processor.annotate_image(img1)
+        # Create Overlay for Before (Yellow: 0, 255, 255) in BGR -> (0, 255, 255)
+        # Processor colors are BGR.
+        overlay1, _ = processor.create_annotation_overlay(img1, color=(0, 255, 255))
         
-        # 2. Process After Image (Just decode for alignment)
+        # 2. Process After Image
         nparr2 = np.frombuffer(after_bytes, np.uint8)
         img2 = cv2.imdecode(nparr2, cv2.IMREAD_COLOR)
         
         # 3. Align
-        # New align_images takes (img1, img2) and handles detection internally
         aligned_img2 = processor.align_images(img1, img2)
         
-        # 4. Annotate Aligned After Image
-        annotated_after, _ = processor.annotate_image(aligned_img2)
+        # 4. Create Overlay for Aligned After (Magenta: 255, 0, 255)
+        overlay2, _ = processor.create_annotation_overlay(aligned_img2, color=(255, 0, 255))
         
-        # 5. Encode both to Base64
+        # 5. Encode all to Base64
         import base64
         
-        _, buf_before = cv2.imencode('.jpg', annotated_before)
-        b64_before = base64.b64encode(buf_before).decode('utf-8')
-        
-        _, buf_after = cv2.imencode('.jpg', annotated_after)
-        b64_after = base64.b64encode(buf_after).decode('utf-8')
+        def encode_img(img, ext='.jpg'):
+            _, buf = cv2.imencode(ext, img)
+            return base64.b64encode(buf).decode('utf-8')
+
+        b64_before = encode_img(img1, '.jpg')
+        b64_after = encode_img(aligned_img2, '.jpg')
+        b64_overlay1 = encode_img(overlay1, '.png') # PNG for transparency
+        b64_overlay2 = encode_img(overlay2, '.png')
         
         return {
             "before": f"data:image/jpeg;base64,{b64_before}",
-            "after": f"data:image/jpeg;base64,{b64_after}"
+            "after": f"data:image/jpeg;base64,{b64_after}",
+            "beforeAnalysis": f"data:image/png;base64,{b64_overlay1}",
+            "afterAnalysis": f"data:image/png;base64,{b64_overlay2}"
         }
         
     except Exception as e:

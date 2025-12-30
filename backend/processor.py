@@ -58,16 +58,18 @@ class ImageProcessor:
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
         return self.detector.detect(mp_image)
 
-    def annotate_image(self, image_numpy, pose_result=None):
-        output_image = image_numpy.copy()
+    def create_annotation_overlay(self, image_numpy, color=(0, 255, 255)):
+        h, w = image_numpy.shape[:2]
+        # Create transparent overlay (BGRA)
+        overlay = np.zeros((h, w, 4), dtype=np.uint8)
+        
         data = {}
-        h, w, _ = output_image.shape
         
         # 1. Use rembg for Segmentation / Body Outline
-        print("Running rembg...")
+        print("Running rembg for overlay...")
         try:
-             # Encode to bytes for rembg
-             _, buf = cv2.imencode('.png', output_image)
+             # Encode original to bytes for rembg
+             _, buf = cv2.imencode('.png', image_numpy)
              image_bytes = buf.tobytes()
              
              result_bg_removed = remove(image_bytes, session=self.rembg_session)
@@ -90,14 +92,17 @@ class ImageProcessor:
                  # Find contours
                  contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                  
-                 # Draw contours (Body Outline)
-                 cv2.drawContours(output_image, contours, -1, (0, 255, 255), 2)
+                 # Draw contours on Overlay
+                 # Color needs to be BGRA: (*color, 255)
+                 draw_color = (*color, 255)
+                 cv2.drawContours(overlay, contours, -1, draw_color, 2)
         except Exception as e:
             print(f"Rembg error: {e}")
 
-        # 2. Draw Eyes and Calculate IPD using FaceLandmarker
-        print("Running face detector for annotations...")
-        image_rgb = cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB)
+        # 2. Draw Eyes and Calculate IPD
+        # Use existing image for detection
+        # Logic is similar, but draw on overlay
+        image_rgb = cv2.cvtColor(image_numpy, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
         
         face_results = self.face_landmarker.detect(mp_image)
@@ -107,39 +112,44 @@ class ImageProcessor:
 
         if face_results.face_landmarks:
              face_landmarks = face_results.face_landmarks[0]
-             # Iris landmarks (Refined): 468 (Left), 473 (Right)
              left_iris = face_landmarks[468]
              right_iris = face_landmarks[473]
-             
              left_eye_loc = (int(left_iris.x * w), int(left_iris.y * h))
              right_eye_loc = (int(right_iris.x * w), int(right_iris.y * h))
         
-        # Fallback to Pose if FaceMesh fails
-        elif pose_result and pose_result.pose_landmarks:
-            landmarks = pose_result.pose_landmarks[0]
-            left_eye = landmarks[2]
-            right_eye = landmarks[5]
-            left_eye_loc = (int(left_eye.x * w), int(left_eye.y * h))
-            right_eye_loc = (int(right_eye.x * w), int(right_eye.y * h))
-
         if left_eye_loc and right_eye_loc:
-            # Calculate Distance
             dist_px = np.linalg.norm(np.array(left_eye_loc) - np.array(right_eye_loc))
             data['pupil_distance_pixels'] = round(dist_px, 2)
             
-            cv2.circle(output_image, left_eye_loc, 3, (0, 0, 255), -1) 
-            cv2.circle(output_image, right_eye_loc, 3, (0, 0, 255), -1)
-            cv2.line(output_image, left_eye_loc, right_eye_loc, (255, 0, 0), 1) 
+            # Draw on Overlay (Red for eyes always? Or same color? Let's keep eyes Red/Blue for visibility)
+            # Eyes: Red
+            cv2.circle(overlay, left_eye_loc, 3, (0, 0, 255, 255), -1) 
+            cv2.circle(overlay, right_eye_loc, 3, (0, 0, 255, 255), -1)
+            # Line: Blue
+            cv2.line(overlay, left_eye_loc, right_eye_loc, (255, 0, 0, 255), 1) 
             
-            cv2.putText(output_image, f"IPD: {dist_px:.1f}px", 
+            # Text: Cyan/White?
+            cv2.putText(overlay, f"IPD: {dist_px:.1f}px", 
                         (min(left_eye_loc[0], right_eye_loc[0]), min(left_eye_loc[1], right_eye_loc[1]) - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0, 255), 2)
         
-        return output_image, data
+        return overlay, data
 
     def process_and_annotate(self, image_bytes):
+        # Backward compatibility / Analysis endpoint
         image, mp_image, result = self.process_image(image_bytes)
-        return self.annotate_image(image, result)
+        overlay, data = self.create_annotation_overlay(image)
+        
+        # Merge overlay onto image
+        # Basic alpha blending
+        alpha_overlay = overlay[:, :, 3] / 255.0
+        alpha_img = 1.0 - alpha_overlay
+        
+        for c in range(0, 3):
+            image[:, :, c] = (alpha_overlay * overlay[:, :, c] + 
+                              alpha_img * image[:, :, c])
+            
+        return image, data
 
     def get_iris_landmarks(self, image_numpy):
         # Convert to mp.Image if needed, but here we expect numpy BGR
